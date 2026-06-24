@@ -2,6 +2,16 @@
 
 ---
 
+## 2026-06-24 — `test/test.sh` 的 Part 1 比對方式改成 column 容忍 + 比例計分
+
+`test/test.sh` 裡 Part 1（verbose）的比對邏輯改動：
+- 比對前先用 `strip_column()` 把每行的 column 數字正規化掉，column 不一致不算錯，只比 line 跟內容
+- 計分從「整份測資逐字一致才給分、不一致就 0 分」改成「依比對正確的行數比例給分」（`verbose_match_ratio()`），分數可能出現小數
+- `PART1_SCORE` / `TOTAL` 因此從整數改成用 `awk` 累加的浮點數，顯示到小數第二位
+
+
+---
+
 ## 2026-06-24 — 修正 verbose log 的位置（column/line）顯示 bug
 
 對應 commit（更新前的最後一版）：`a6103a2`
