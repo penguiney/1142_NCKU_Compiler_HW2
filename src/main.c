@@ -176,6 +176,8 @@ Object code_getLength(Object* obj, const YYLTYPE* loc) {
     //   3. 依型別（STR / ARRAY）呼叫對應的 runtime 函式，輸出 call IR
     //      可用的 runtime 函式見 LLVM_IR_CHEATSHEET.md §Runtime 函式
     //   4. 清理 Object，回傳包含結果暫存器的 REGISTER Object
+    //   記 log 時用 compilerLogAt(loc, ...)，不要用 compilerLog(...)：
+    //   loc 才是這個 ValueStmt 真正的起點，全域 yylloc 此時可能已經被 lookahead 推到下一句
     object_free(obj);
     return (Object){.type = OBJECT_TYPE_UNDEFINED};
 }
@@ -216,7 +218,7 @@ bool code_arrayPush(const Object* arr, Object* val, const YYLTYPE* loc) {
         goto FAILED;
     }
 
-    compilerLog("push 「%s」 <- %s\n", arr->value.symbol->name, object_print(val));
+    compilerLogAt(loc, "push 「%s」 <- %s\n", arr->value.symbol->name, object_print(val));
     buffPrintln(&ctx->code, "call void @wy_rt_array_add_ptr(ptr %s, ptr %s)", arrName, ptrName);
 
     object_free(&regArr);

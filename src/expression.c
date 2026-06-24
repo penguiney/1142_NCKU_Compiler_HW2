@@ -43,7 +43,10 @@ Object code_expression(const ExpOp eop, const bool opLeft, Object* a, Object* b,
     //   4. 根據型別（整數/浮點）選擇對應的 IR opcode（opIRIntNames / opIRFloatNames）
     //   5. 輸出 IR 指令；字串加法需呼叫 runtime 函式而非算術指令
     //      可用的 IR opcode 與 runtime 函式見 LLVM_IR_CHEATSHEET.md
-    //   6. 清理 Object，回傳 REGISTER Object
+    //   6. 用 compilerLogAt(aLoc, ...) 印 log（別用 compilerLog：全域 yylloc
+    //      此時可能已被 lookahead 推到下一句；aLoc 在文法規則裡記得傳這個
+    //      運算式自己的起點 token，不要傳成運算元的位置——詳見 YACC_CHEATSHEET.md）
+    //   7. 清理 Object，回傳 REGISTER Object
 
 FAILED:
     if (!object_sameRegister(a, b)) object_free(a);

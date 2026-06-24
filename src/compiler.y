@@ -112,12 +112,16 @@ ConditionStmt
 ;
 
 /* TODO: 各種操作語句
- * 涵蓋變數宣告、命名、賦值、函式呼叫、陣列 push、印出、return。
+ * 涵蓋變數宣告、命名、賦值、函式呼叫、陣列 push、印出、return、break。
  * 函式：object_ValueDataList*, code_createVariable, code_assign, code_stdoutPrint,
- *       code_arrayPush, code_return, code_returnValue,
+ *       code_arrayPush, code_return, code_returnValue, code_break,
  *       func_callInit, func_callArgAdd, func_call, func_takeAndCall
  * 注意：函式呼叫分前置（施）與後置（以施）兩種；mid-rule action 用 $0 傳遞中間值；
  *       呼叫結果後可接命名、return、print 或省略
+ * 位置參數：code_return/code_returnValue/code_break 都多一個 tokenLoc 參數，
+ *       呼叫時記得帶 RETURN/BREAK 那個 token 自己的 @N（例如 &@1），
+ *       不要省略——規則 reduce 前可能已經往後看了一個 token，
+ *       全域 yylloc 屆時會指到下一句而非這個 token 自己的位置
  */
 OperationStmt
     :
@@ -135,6 +139,11 @@ VariableDefineStmt
 /* TODO: 運算式（四則/邏輯，鏈式）
  * 函式：code_expression/Mod, code_expressionChain/Mod
  * 注意：鏈式第一項用 code_expression，後續用 code_expressionChain；需更新 ctx->last_result
+ * 位置參數：aLoc 不是單純「左運算元的位置」，是「整個運算式的起點 token」，
+ *       log 跟報錯都靠它定位。大部分規則第一個符號就是起點，直接傳 &@1；
+ *       但如果文法是「運算子在前」（例如 乘/加/減 開頭、或 凡/兩者 開頭的二元邏輯），
+ *       別把 aLoc 設成運算元的位置，要傳那個開頭運算子/關鍵字自己的 &@1，
+ *       否則 verbose log 印出來的位置會偏移
  */
 ExpressionChainStmt
     :

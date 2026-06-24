@@ -33,7 +33,7 @@ bool code_whileLoopEnd(Object* obj) {
     return false;
 }
 
-bool code_break() {
+bool code_break(const YYLTYPE* tokenLoc) {
     // TODO: 跳出最近的迴圈
     //
     // 實作前先閱讀以下內容：
@@ -46,7 +46,8 @@ bool code_break() {
     // 讀懂後實作（約 4 行）：
     //   - 取得最近的迴圈 scope
     //   - 不在迴圈內時報錯並 return true
-    //   - compilerLog 輸出 break 訊息
+    //   - compilerLogAt(tokenLoc, ...) 輸出 break 訊息（別用 compilerLog，
+    //     全域 yylloc 此時可能已被 lookahead 推到下一句）
     //   - 輸出 br 跳到 exit label
     return false;
 }
