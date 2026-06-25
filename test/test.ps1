@@ -11,7 +11,7 @@
 .PARAMETER NoCompile
     Skip rebuild
 .PARAMETER English
-    English mode (questions_en + questions_advanced_en, VERBOSE_EN=ON)
+    English mode (questions_en + questions_advanced_en, EN_MODE=ON)
 .PARAMETER Interactive
     Interactive diff (with pager)
 .PARAMETER BuildDir
@@ -35,7 +35,7 @@ if (-not $BuildDir) { $BuildDir = Join-Path $Root "build" }
 if (-not $NoCompile) {
     Write-Host "Compiling..." -ForegroundColor Cyan
     $CmakeArgs = @("-B", $BuildDir, "-S", $Root, "-DCMAKE_BUILD_TYPE=Release")
-    if ($English) { $CmakeArgs += "-DVERBOSE_EN=ON" }
+    if ($English) { $CmakeArgs += "-DEN_MODE=ON" }
     if (-not (Test-Path $BuildDir)) {
         & cmake @CmakeArgs
         if ($LASTEXITCODE -ne 0) { Write-Host "CMake configure failed." -ForegroundColor Red; exit 1 }
