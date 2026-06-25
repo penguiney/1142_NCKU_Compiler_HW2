@@ -63,3 +63,11 @@ git merge upstream/master
 3. 重新 build 跑一次 `test/test.sh` 確認沒有壞掉
 
 如果不想用 git merge，也可以手動對照上表，自己在程式碼裡補參數即可，改動量很小（每個呼叫處只多一個參數）。
+
+> **附註**：如果 `git fetch && git merge` 直接報 `unrelated histories`——因為剛發布那幾天還在改文件，有 force push 過，改用 cherry-pick 即可：
+> ```bash
+> git remote add upstream git@github.com:WavJaby/NCKU_Compiler_HW2.git   # 已加過就跳過
+> git fetch upstream
+> git cherry-pick a6103a2..upstream/master
+> # 有衝突就解完後: git add -A && git cherry-pick --continue
+> ```
