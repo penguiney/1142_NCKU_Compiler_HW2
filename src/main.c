@@ -207,6 +207,7 @@ FAILED:
 
 
 Object code_getLength(Object* obj, const YYLTYPE* loc) {
+    //compilerLog("[main]code_getLength\n");
     const ObjectType objType = object_getValueType(obj);
     if (objType != OBJECT_TYPE_ARRAY && objType != OBJECT_TYPE_STR) {
         yyerrorlf("「%s」非列亦非書，無由問其長\n", loc, objectType2str[objType]);
@@ -214,16 +215,29 @@ Object code_getLength(Object* obj, const YYLTYPE* loc) {
         return (Object){.type = OBJECT_TYPE_UNDEFINED};
     }
 
-    // TODO: 取得物件的 LLVM 運算元，輸出長度查詢 IR，回傳 REGISTER Object
-    //   1. 取得 obj 的 IR 運算元字串（參考 object_nameLiteralOrLoadReg）
-    //   2. 分配一個 I64 結果暫存器（參考 object_createRegisterSymbol）
-    //   3. 依型別（STR / ARRAY）呼叫對應的 runtime 函式，輸出 call IR
-    //      可用的 runtime 函式見 LLVM_IR_CHEATSHEET.md §Runtime 函式
-    //   4. 清理 Object，回傳包含結果暫存器的 REGISTER Object
+    //  1. 取得 obj 的 IR 運算元字串（參考 object_nameLiteralOrLoadReg）
+    char objName[MAX_NAME_LENGTH];
+    Object regObj = object_nameLiteralOrLoadReg(obj, objName, MAX_NAME_LENGTH);
+
+    //  2. 分配一個 I64 結果暫存器（參考 object_createRegisterSymbol）
+    SymbolData zeroBasedReg = object_createRegisterSymbol(OBJECT_TYPE_I64);
+
+    //  3. 依型別（STR / ARRAY）呼叫對應的 runtime 函式，輸出 call IR
+    //   可用的 runtime 函式見 LLVM_IR_CHEATSHEET.md §Runtime 函式
     //   記 log 時用 compilerLogAt(loc, ...)，不要用 compilerLog(...)：
     //   loc 才是這個 ValueStmt 真正的起點，全域 yylloc 此時可能已經被 lookahead 推到下一句
+    // %reg0 = call i64 @wy_rt_array_get_length(ptr %reg_arr) / %reg0 = call i64 @wy_rt_str_length(ptr %reg_str)
+    if (objType == OBJECT_TYPE_ARRAY) {
+        buffPrintln(&ctx->code, "    %%reg%s = call i64 @wy_rt_array_get_length(ptr %s)", zeroBasedReg.name, objName);
+        compilerLogAt(loc, "length %s -> reg<長數>\n", object_print(obj));
+    } else {
+        compilerLog("[main]code_getLength : 此處尚未實作\n");
+    }
+
+    //   4. 清理 Object，回傳包含結果暫存器的 REGISTER Object
+    object_free(&regObj);
     object_free(obj);
-    return (Object){.type = OBJECT_TYPE_UNDEFINED};
+    return (Object){ .type = OBJECT_TYPE_REGISTER, .value.symbol = cloneStruct(SymbolData, &zeroBasedReg)};
 }
 
 bool code_arrayPush(const Object* arr, Object* val, const YYLTYPE* loc) {

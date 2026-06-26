@@ -118,7 +118,7 @@ ConditionStmt
     : IF ExpressionStmt TOPIC { yylloc = @3; code_if(&$2); } BodyListStmt IfEndStmt
     | WHILE_TRUE { code_whileLoopStart(); } BodyListStmt END { code_whileLoopEnd(NULL); }
     | FOR ValueStmt TIMES { code_forLoop(&$2); } BodyListStmt END { code_forLoopEnd(NULL); }
-    | BREAK { code_break(); }
+    | BREAK { code_break(&@1); }
 ;
 
 IfEndStmt
@@ -150,11 +150,12 @@ OperationStmt
     | ExpressionChainStmt PAST IDENT TOPIC SET ITS IS_THUS {yylloc = @3; Object dest = scope_findSymbol($<s_var>3); code_assign(&dest, &$1); }
     | THOSE VariableStmt INDEX VariableStmt { ctx->last_result = object_getIndex(&$2, &$4, &@2, &@4); } ExpressionNextStmt
     | PUSH VariableStmt PushStmt
+    | THOSE VariableStmt LENGTH PRINT {Object leng = code_getLength(&$2, &@1); code_stdoutPrintObject( &leng, false, true);}
 ;
 
 CreateValueDataListStmt
     : HERE_IS_A VAR_TYPE { object_ValueDataListCreate($<var_type>2, NULL, &$$); }
-    | HERE_ARE NUMBER_LIT VAR_TYPE { object_ValueDataListCreate($<var_type>3, &$<n_var>2, &$$); } /* 吾有兩數。名之曰「零」。曰「無」。*/
+    | HERE_ARE NUMBER_LIT VAR_TYPE { object_ValueDataListCreate($<var_type>3, &$<n_var>2, &$$); }
     | HERE_IS_A VAR_TYPE NUMBER_LIT { 
         object_ValueDataListCreate($<var_type>2, NULL, &$$);
         ScientificNotation* num = malloc(sizeof(ScientificNotation));
@@ -183,7 +184,7 @@ RepeatSaidIdentStmt
 
 PushStmt
     : /* empty */
-    | PushStmt EXP_PREPOSITION ValueStmt { code_arrayPush(&$<obj_val>0, &$<obj_val>3, &@2); }
+    | PushStmt EXP_PREPOSITION ValueStmt { code_arrayPush(&$<obj_val>0, &$<obj_val>3, &@3); }
 ;
 
 
@@ -205,15 +206,15 @@ VariableDefineStmt
 ExpressionChainStmt
     : ExpressionStmt { $$ = $1; ctx->last_result = $1; }
     | ExpressionChainStmt EXP_MATH_OP ITS EXP_PREPOSITION ValueStmt { $$ = code_expressionChain($<exp_op>2, $<exp_left>4, &ctx->last_result, &$5, &@2, &@5); ctx->last_result = $$; }
-    | ExpressionChainStmt EXP_MATH_OP ValueStmt EXP_PREPOSITION ITS { yylloc.first_column += 2;  $$ = code_expressionChain($<exp_op>2, $<exp_left>4, &$3, &ctx->last_result, &@3, &@2); ctx->last_result = $$; }
+    | ExpressionChainStmt EXP_MATH_OP ValueStmt EXP_PREPOSITION ITS { $$ = code_expressionChain($<exp_op>2, $<exp_left>4, &$3, &ctx->last_result, &@2, &@5); ctx->last_result = $$; }
     | ExpressionChainStmt EXP_MATH_OP ITS EXP_PREPOSITION ValueStmt EXP_MATH_MOD_OP { $$ = code_expressionChainMod($<exp_op>2, OP_MOD, $<exp_left>4, &ctx->last_result, &$5, &@2, &@6); ctx->last_result = $$; }
 ;
 
 ExpressionStmt
-    : EXP_MATH_OP ValueStmt EXP_PREPOSITION ValueStmt { $$ = code_expression($<exp_op>1, $<exp_left>3, &$2, &$4, &@2, &@4); }
+    : EXP_MATH_OP ValueStmt EXP_PREPOSITION ValueStmt { $$ = code_expression($<exp_op>1, $<exp_left>3, &$2, &$4, &@1, &@4); }
     | EXP_MATH_OP ValueStmt EXP_PREPOSITION ValueStmt EXP_MATH_MOD_OP { $$ = code_expressionMod($<exp_op>1, OP_MOD, $<exp_left>3, &$2, &$4, &@1, &@5); }
-    | ValueStmt EXP_LOGIC_OP ValueStmt { yylloc.first_column++; $$ = code_expression($<exp_op>2, false, &$1, &$3, &@1, &@3); }
-    | THOSE ValueStmt ValueStmt EXP_BINARY_LOGIC_OP { $$ = code_expression($<exp_op>4, false, &$2, &$3, &@2, &@3); }
+    | ValueStmt EXP_LOGIC_OP ValueStmt { $$ = code_expression($<exp_op>2, false, &$1, &$3, &@1, &@3); }
+    | THOSE ValueStmt ValueStmt EXP_BINARY_LOGIC_OP { $$ = code_expression($<exp_op>4, false, &$2, &$3, &@1, &@3); }
 ;
 
 ExpressionNextStmt
@@ -223,8 +224,7 @@ ExpressionNextStmt
             object_ValueDataListAdd(&vd, &ctx->last_result, &@1);
             code_createVariable(&vd, $<s_var>2);
     }
-    | PRINT {/* */}
-    | /* empty */ %prec LOWER_THAN_EXPR
+    | PRINT {code_stdoutPrintObject( &ctx->last_result, false, true);}
 ;
 
 ValueLiteralOrLastStmt
@@ -239,6 +239,7 @@ ValueLiteralOrLastStmt
 ValueStmt
     : ValueLiteralStmt { $$ = $1; }
     | VariableStmt     { $$ = $1; }
+    | VariableStmt LENGTH { $$ = code_getLength(&$1, &@1); }
 ;
 
 /* 值區：SAID 後面接字面值或變數，直到遇到 NAME_IT 或 PRINT 為止 */

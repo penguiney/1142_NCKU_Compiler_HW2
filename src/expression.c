@@ -39,60 +39,52 @@ Object code_expression(const ExpOp eop, const bool opLeft, Object* a, Object* b,
 
     const ObjectType targetType = object_getPromotedType(aValueType, bValueType);
 
-    // TODO: 實作二元運算式 IR 生成，完成後回傳 OBJECT_TYPE_REGISTER Object
-    //   1. 分配結果暫存器（型別視運算子是否輸出布林而定）
-    //   2. 驗證運算子與型別合法（isExpressionOperationLegal）
-    //   3. 取得兩側運算元字串，注意 opLeft 決定 a/b 的左右方向
-    //   4. 根據型別（整數/浮點）選擇對應的 IR opcode（opIRIntNames / opIRFloatNames）
-    //   5. 輸出 IR 指令；字串加法需呼叫 runtime 函式而非算術指令
-    //      可用的 IR opcode 與 runtime 函式見 LLVM_IR_CHEATSHEET.md
-    //   6. 清理 Object，回傳 REGISTER Object
-    // 1. 分配結果暫存器
+    // 1. 分配結果暫存器（型別視運算子是否輸出布林而定）
     const bool isBoolResult = ExpOp_isOutputLogic(eop) || ExpOp_isBooleanOnly(eop);
     const ObjectType resultType = isBoolResult ? OBJECT_TYPE_BOOL : targetType;
     const SymbolData resultSymbol = object_createRegisterSymbol(resultType);
 
-    // 2. 驗證合法性
+    // 2. 驗證運算子與型別合法（isExpressionOperationLegal）
     if (!isExpressionOperationLegal(eop, targetType)) goto FAILED;
 
     {
-        // 3. 取得兩側運算元字串
+        // 3. 取得兩側運算元字串，注意 opLeft 決定 a/b 的左右方向
         char regNameA[MAX_NAME_LENGTH], regNameB[MAX_NAME_LENGTH];
-        Object regA = object_nameLiteralOrLoadReg(a, regNameA, MAX_NAME_LENGTH);
+        Object regA = object_loadRegAndPromote(a, targetType, regNameA, MAX_NAME_LENGTH);
         if (regA.type == OBJECT_TYPE_UNDEFINED) goto FAILED;
-        Object regB = object_nameLiteralOrLoadReg(b, regNameB, MAX_NAME_LENGTH);
+        Object regB = object_loadRegAndPromote(b, targetType, regNameB, MAX_NAME_LENGTH);
         if (regB.type == OBJECT_TYPE_UNDEFINED) goto FAILED;
 
-        // opLeft=true 表示「於」，a 是右側，b 是左側
         const char* left  = opLeft ? regNameB : regNameA;
         const char* right = opLeft ? regNameA : regNameB;
 
         const char* llvmTypeName = objectType2llvmType[targetType];
 
-        // 4. 選擇 IR opcode
-        const char* opcode = ObjectType_isFloat(targetType)
-            ? opIRFloatNames[eop]
-            : opIRIntNames[eop];
-   
-        buffPrintln(&ctx->code, "%%reg%s = %s %s %s, %s", resultSymbol.name, opcode, llvmTypeName, left, right);
+        //  4. 根據型別（整數/浮點）選擇對應的 IR opcode（opIRIntNames / opIRFloatNames）
+        //  5. 輸出 IR 指令；字串加法需呼叫 runtime 函式而非算術指令
+        //      可用的 IR opcode 與 runtime 函式見 LLVM_IR_CHEATSHEET.md
+        if (targetType == OBJECT_TYPE_STR && eop == OP_ADD) {
+            buffPrintln(&ctx->code, "    %%reg%s = call ptr @wy_rt_str_concat(ptr %s, ptr %s)", resultSymbol.name, left, right);
+        } else {
+            const char* opcode = ObjectType_isFloat(targetType) ? opIRFloatNames[eop] : opIRIntNames[eop];
+            buffPrintln(&ctx->code, "    %%reg%s = %s %s %s, %s", resultSymbol.name, opcode, llvmTypeName, left, right);
+        }
 
-        // 輸出verpose
-        compilerLog("exp %s %s %s -> reg<%s>\n", object_print(opLeft ? b : a), opDebugNames[eop], object_print(opLeft ? a : b), objectType2str[resultType]);
+        //  6. 用 compilerLogAt(aLoc, ...) 印 log（別用 compilerLog：全域 yylloc
+        //     此時可能已被 lookahead 推到下一句；aLoc 在文法規則裡記得傳這個
+        //     運算式自己的起點 token，不要傳成運算元的位置——詳見 YACC_CHEATSHEET.md）
+        compilerLogAt(aLoc, "exp %s %s %s -> reg<%s>\n", object_print(opLeft ? b : a), opDebugNames[eop], object_print(opLeft ? a : b), objectType2str[resultType]);
         
         if (b->type == OBJECT_TYPE_SYMBOL) object_free(&regB);
     }
 
-    // 6. 清理並回傳
+    //   7. 清理 Object，回傳 REGISTER Object
     if (!object_sameRegister(a, b)) object_free(a);
     object_free(b);
     return (Object){
         .type = OBJECT_TYPE_REGISTER,
         .value.symbol = cloneStruct(SymbolData, &resultSymbol)
     };
-    //   6. 用 compilerLogAt(aLoc, ...) 印 log（別用 compilerLog：全域 yylloc
-    //      此時可能已被 lookahead 推到下一句；aLoc 在文法規則裡記得傳這個
-    //      運算式自己的起點 token，不要傳成運算元的位置——詳見 YACC_CHEATSHEET.md）
-    //   7. 清理 Object，回傳 REGISTER Object
 
 FAILED:
     if (!object_sameRegister(a, b)) object_free(a);

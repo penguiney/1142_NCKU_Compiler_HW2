@@ -5,6 +5,7 @@
 #include "object.h"
 #include "value_data.h"
 
+bool code_stdoutPrintObject(Object* src, bool space, bool newLine);
 bool code_stdoutPrint(ValueData* valueData, bool newLine);
 bool code_createVariable(ValueData* valueData, char* name);
 bool code_assign(Object* dest, Object* src);
