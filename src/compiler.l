@@ -170,6 +170,87 @@ EXCLUDE_QUO [\x20-\x7E]|{B2}|{B3_1}|{B3_2_EXCLUDE_QUO}|{B3_3}|{B3_4}|{B4_1}|{B4_
 "。" {}
 "，" {}
 
+"長"    { yylval.var_type = OBJECT_TYPE_I64;    lexerLog("VAR_TYPE 長\n"); return VAR_TYPE; }
+"數"    { yylval.var_type = OBJECT_TYPE_I32;    lexerLog("VAR_TYPE 數\n"); return VAR_TYPE; }
+"言"    { yylval.var_type = OBJECT_TYPE_STR;    lexerLog("VAR_TYPE 言\n"); return VAR_TYPE; }
+"爻"    { yylval.var_type = OBJECT_TYPE_BOOL;   lexerLog("VAR_TYPE 爻\n"); return VAR_TYPE; }
+"元"    { yylval.var_type = OBJECT_TYPE_AUTO;   lexerLog("VAR_TYPE 元\n"); return VAR_TYPE; }
+"列"    { yylval.var_type = OBJECT_TYPE_ARRAY;  lexerLog("VAR_TYPE 列\n"); return VAR_TYPE; }
+"術"    { yylval.var_type = OBJECT_TYPE_FUNC;   lexerLog("VAR_TYPE 術\n"); return VAR_TYPE; }
+
+"陰"    { yylval.b_var = false; lexerLog("BOOL_LIT 陰\n"); return BOOL_LIT; }
+"陽"    { yylval.b_var = true;  lexerLog("BOOL_LIT 陽\n"); return BOOL_LIT; }
+
+"有"        { lexerLog("HERE_IS_A 有\n");       return HERE_IS_A; }
+"吾有"      { lexerLog("HERE_ARE 吾有\n");      return HERE_ARE; }
+"今有"      { lexerLog("HERE_ARE 今有\n");      return HERE_ARE; }
+"名之曰"    { lexerLog("NAME_IT 名之曰\n");     return NAME_IT; }
+"曰"        { lexerLog("SAID 曰\n");            return SAID; }
+"昔之"      { lexerLog("PAST 昔之\n");          return PAST; }
+"者"        { lexerLog("TOPIC 者\n");           return TOPIC; }
+"今"        { lexerLog("SET 今\n");             return SET; }
+"其"        { lexerLog("ITS 其\n");             return ITS; }
+"是矣"      { lexerLog("IS_THUS 是矣\n");       return IS_THUS; }
+
+"加"            { yylval.exp_op = OP_ADD; lexerLog("OP_ADD +\n"); return EXP_MATH_OP; }
+"減"            { yylval.exp_op = OP_SUB; lexerLog("OP_SUB -\n"); return EXP_MATH_OP; }
+"乘"            { yylval.exp_op = OP_MUL; lexerLog("OP_MUL *\n"); return EXP_MATH_OP; }
+"除"            { yylval.exp_op = OP_DIV; lexerLog("OP_DIV /\n"); return EXP_MATH_OP; }
+"所餘幾何"      { yylval.exp_op = OP_MOD; lexerLog("OP_MOD \%\n"); return EXP_MATH_MOD_OP; }
+"中有陽乎"      { yylval.exp_op = OP_OR; lexerLog("OP_OR ||\n"); return EXP_BINARY_LOGIC_OP; }
+"中無陰乎"      { yylval.exp_op = OP_AN; lexerLog("OP_AND &&\n"); return EXP_BINARY_LOGIC_OP; }
+"大於"          { yylval.exp_op = OP_GT; lexerLog("OP_GT >\n"); return EXP_LOGIC_OP; }
+"小於"          { yylval.exp_op = OP_LT; lexerLog("OP_LT <\n"); return EXP_LOGIC_OP; }
+"不大於"        { yylval.exp_op = OP_LE; lexerLog("OP_LE <=\n"); return EXP_LOGIC_OP; }
+"不小於"        { yylval.exp_op = OP_GE; lexerLog("OP_GE >=\n"); return EXP_LOGIC_OP; }
+"等於"          { yylval.exp_op = OP_EQ; lexerLog("OP_EQ ==\n"); return EXP_LOGIC_OP; }
+"不等於"        { yylval.exp_op = OP_NE; lexerLog("OP_NE !=\n"); return EXP_LOGIC_OP; }
+"於"            { yylval.exp_left = true; lexerLog("<-\n"); return EXP_PREPOSITION; }
+"以"            { yylval.exp_left = false; lexerLog("->\n"); return EXP_PREPOSITION; }
+
+"若"        { lexerLog("IF 若\n"); return IF; }
+"或若"      { lexerLog("ELSE_IF 或若\n"); return ELSE_IF; }
+"若非"      { lexerLog("ELSE 若非\n"); return ELSE; }
+"為是"      { lexerLog("FOR 為是\n"); return FOR; }
+"遍"        { lexerLog("TIMES 遍\n"); return TIMES; }
+"恆為是"    { lexerLog("WHILE_TRUE 恆為是\n"); return WHILE_TRUE; }
+"乃止"      { lexerLog("BREAK 乃止\n"); return BREAK; }
+"乃得"      { lexerLog("RETURN 乃得\n"); return RETURN; }
+"云云"      { lexerLog("END 云云\n"); return END; }
+"也"        { lexerLog("END 也\n"); return END; }
+"矣"        { lexerLog("END 矣\n"); return END; }
+
+"之"            { lexerLog("INDEX 之\n");       return INDEX; }
+"充"            { lexerLog("PUSH 充\n");        return PUSH; }
+"之長"          { lexerLog("LENGTH 之長\n");    return LENGTH; }
+"書之"          { lexerLog("PRINT 書之\n");     return PRINT; }
+"夫"            { lexerLog("THOSE 夫\n");       return THOSE; }
+"取"            { lexerLog("TAKE 取\n");        return TAKE; }
+"注曰"          { lexerLog("COMMENT 注曰\n");   return COMMENT; }
+"疏曰"          { lexerLog("COMMENT 疏曰\n");   return COMMENT; }
+"批曰"          { lexerLog("COMMENT 批曰\n");   return COMMENT; }
+
+"「"                        { BEGIN(IDENT_CON); yymore_utf8();}
+<IDENT_CON>"」"             { BEGIN(INITIAL); trimStringToken(3, &yylval.s_var); lexerLog("IDENT '%s'\n", yylval.s_var); return IDENT;}
+<IDENT_CON>\r?\n            { updateNewline(); yymore_utf8(); }
+<IDENT_CON>{EXCLUDE_QUO}+   { yymore_utf8(); }
+
+"「「"                        { BEGIN(STR_CON); yymore_utf8();}
+<STR_CON>"」」"             { BEGIN(INITIAL); trimStringToken(6, &yylval.s_var); lexerLog("STR_LIT \"%s\"\n", yylval.s_var); return STR_LIT;}
+<STR_CON>\r?\n            { updateNewline(); yymore_utf8(); }
+<STR_CON>{EXCLUDE_QUO}+   { yymore_utf8(); }
+
+{digit}+ {
+    ScientificNotation sci;
+    if (chineseToArabic(yytext, &sci)) {
+        lexerLog("CH_NUM_ERROR\n"); 
+    } else {
+        yylval.n_var = sci; 
+        lexerLog("NUMBER_LIT %g\n", sciToDouble(&sci));
+        return NUMBER_LIT;
+    }
+}
+
 [ \t]+      {}
 \r?\n       { updateNewline(); }
 {UTF8_BOM}  { updateNewline(); /* Skip UTF-8 BOM */ }

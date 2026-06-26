@@ -117,6 +117,17 @@ void scope_push_typed(ScopeType type, const void* data) {
 
 // cloneStruct / map_putpp / strdup 用法：見 README.md §工具函式速查
 SymbolData* scope_addSymbol(const ObjectType type, char* name) {
+    // 順著 scopeStack 從最內層 (head->prev) 往外層 (head) 遍歷
+    LinkedListNode* currNode = ctx->scopeStack.head->prev;
+    // 因為是環狀鏈結串列，當 currNode 繞回 sentinel 節點 (head) 時代表全部查完
+    while (currNode != ctx->scopeStack.head) {
+        ScopeData* scope = (ScopeData*)currNode->value;
+        // 使用速查表提供的 map_get 進行查找 發現重複的同名符號，拒絕插入，直接回傳 NULL
+        if (map_get(&scope->symbolMap, name) != NULL) return NULL;
+        // 往外層作用域移動 (在 Stack 中，底層通常在 prev 方向)
+        currNode = currNode->prev;
+    }
+
     const SymbolData symbol = {.type = type, .name = strdup(name), .index = ctx->variableCount++};
     SymbolData* symbolData = cloneStruct(SymbolData, &symbol);
     if (!symbolData)
@@ -298,7 +309,7 @@ Object scope_findSymbol(char* name) {
             //   回傳一個 capturedIndex = -1 的 SYMBOL Object（參考閉包分支的回傳格式）
             if (searchCtx == ctx) {
                 /* 填空 */
-                return (Object){OBJECT_TYPE_UNDEFINED};
+                return (Object){OBJECT_TYPE_SYMBOL, .capturedIndex = -1, .value.symbol = symbol};
             }
 
             // Found in an outer function, propagate capture layer by layer.

@@ -48,5 +48,12 @@ bool code_break() {
     //   - 不在迴圈內時報錯並 return true
     //   - compilerLog 輸出 break 訊息
     //   - 輸出 br 跳到 exit label
+    ScopeData* loopScope = scope_findNearestLoop();
+    if (!loopScope || loopScope->id < 0) {
+        yyerrorf("乃止必在迴圈之內\n");
+        return true;
+    }
+    compilerLog("break (loop%d)\n", loopScope->id);
+    buffPrintln(&ctx->code, "br label %%loop%d.exit", loopScope->id);
     return false;
 }

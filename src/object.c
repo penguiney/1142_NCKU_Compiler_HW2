@@ -185,12 +185,17 @@ SymbolData object_createRegisterSymbol(const ObjectType finalType) {
 }
 
 Object object_nameLiteralOrLoadReg(const Object* src, char* buffer, const size_t bufferLen) {
+    //compilerLog("[object] object_nameLiteralOrLoadReg\n");
+    //compilerLog("[debug] type=%d fraction=%lld exp=%d\n", src->value.number->type, src->value.number->fraction, src->value.number->exp);
+    //compilerLog("[debug] type=%d\n", src->type);
     const char* llvmTypeName = objectType2llvmType[object_getValueType(src)];
     switch (src->type) {
     case OBJECT_TYPE_REGISTER:
         // TODO: (Week 2) 暫存器值不需 load，直接把暫存器名稱寫入 buffer 並回傳 *src
         //   暫存器的命名格式見 LLVM_IR_CHEATSHEET.md §作業命名規則
-        return (Object){OBJECT_TYPE_UNDEFINED, .value = {}};
+        //return (Object){OBJECT_TYPE_UNDEFINED, .value = {}};
+        snprintf(buffer, bufferLen, "%%reg%s", src->value.symbol->name);
+        return *src;
     case OBJECT_TYPE_SYMBOL: {
         // TODO: (Week 4) 補全三個特殊 SYMBOL 情況，各自有不同的 buffer 格式與回傳方式
         //   1. capturedIndex >= 0：閉包上值，讀取方式與一般變數不同
@@ -208,7 +213,9 @@ Object object_nameLiteralOrLoadReg(const Object* src, char* buffer, const size_t
     case OBJECT_TYPE_I32:
     case OBJECT_TYPE_I64:
     case OBJECT_TYPE_F64: {
+        //compilerLog("[debug] =%d\n", src->value.number->exp);
         char* numStr = sciToStr(src->value.number);
+        //compilerLog("[debug] =%s\n", numStr);
         snprintf(buffer, bufferLen, "%s", numStr);
         free(numStr);
         return *src;

@@ -37,20 +37,27 @@
 }
 /* Token — quick start 最小集合，實作各規則時依需要自行補充 */
 %token COMMENT
-%token HERE_ARE HERE_IS_A SAID NAME_IT
+%token HERE_ARE HERE_IS_A SAID NAME_IT PAST TOPIC SET ITS IS_THUS
+%token IF ELSE_IF ELSE FOR TIMES WHILE_TRUE BREAK END
+%token INDEX PUSH LENGTH THOSE TAKE 
 %token PRINT TO_CALL
 %token RETURN
 
 %token <n_var> NUMBER_LIT
 %token <b_var> BOOL_LIT
 %token <var_type> VAR_TYPE
+%token <var_type> VAR_TYPE_FUNC
 %token <s_var> STR_LIT IDENT
+%token <exp_op> EXP_MATH_OP EXP_MATH_MOD_OP EXP_LOGIC_OP EXP_BINARY_LOGIC_OP 
+%token <exp_left> EXP_PREPOSITION
 
 /* %left 範例 — ValueStmt 實作時視衝突補充 */
 %left INDEX
 
 /* Nonterminal with return — 實作子規則時依需要自行補充 */
 %type <val_data> CreateValueDataListStmt
+%type <obj_val> ValueLiteralStmt VariableStmt NoSaidLitOrVarStmt LitOrVarStmt MultiLitOrVarStmt 
+%type <obj_val> ExpressionStmt ExpressionChainStmt ValueStmt
 
 /* For Return — 用於已提供的 ReturnStmt，詳見 YACC_CHEATSHEET.md §優先序宣告 */
 %nonassoc LOWER_THAN_EXPR
@@ -108,7 +115,20 @@ FunctionArgListStmt
  * 注意：else-if 與 else 皆為可選；IF 結構由三個子規則組成
  */
 ConditionStmt
-    :
+    : IF ExpressionStmt TOPIC { yylloc = @3; code_if(&$2); } BodyListStmt IfEndStmt
+    | WHILE_TRUE { code_whileLoopStart(); } BodyListStmt END { code_whileLoopEnd(NULL); }
+    | FOR ValueStmt TIMES { code_forLoop(&$2); } BodyListStmt END { code_forLoopEnd(NULL); }
+    | BREAK { code_break(); }
+;
+
+IfEndStmt
+    : END { code_ifEnd(); }
+    | ELSE { code_else(); } BodyListStmt END { code_ifEnd(); }
+    | ElseIfStmt
+;
+
+ElseIfStmt
+    : ELSE_IF { code_elseIfLabel(); } ExpressionStmt TOPIC { code_elseIf(&$3); } BodyListStmt IfEndStmt
 ;
 
 /* TODO: 各種操作語句
@@ -120,15 +140,52 @@ ConditionStmt
  *       呼叫結果後可接命名、return、print 或省略
  */
 OperationStmt
-    :
+    : CreateValueDataListStmt { $<val_data>$ = $1; } MultiLitOrVarStmt { object_ValueDataListAddDefaults(&$<val_data>2, &@1); $<val_data>$ = $<val_data>2; } EndStmt
+    | PAST IDENT TOPIC SET NoSaidLitOrVarStmt IS_THUS { Object dest = scope_findSymbol($<s_var>2); code_assign(&dest, &$5); }
+    | ExpressionChainStmt { ctx->last_result = $1; } ExpressionNextStmt
+    | ExpressionChainStmt PAST IDENT TOPIC SET ITS IS_THUS {yylloc = @3; Object dest = scope_findSymbol($<s_var>3); code_assign(&dest, &$1); }
+    | THOSE VariableStmt INDEX VariableStmt { ctx->last_result = object_getIndex(&$2, &$4, &@2, &@4); } ExpressionNextStmt
+    | PUSH VariableStmt PushStmt
 ;
 
 CreateValueDataListStmt
-    :
+    : HERE_IS_A VAR_TYPE { object_ValueDataListCreate($<var_type>2, NULL, &$$); }
+    | HERE_ARE NUMBER_LIT VAR_TYPE { object_ValueDataListCreate($<var_type>3, &$<n_var>2, &$$); } /* 吾有兩數。名之曰「零」。曰「無」。*/
+    | HERE_IS_A VAR_TYPE NUMBER_LIT { 
+        object_ValueDataListCreate($<var_type>2, NULL, &$$);
+        ScientificNotation* num = malloc(sizeof(ScientificNotation));
+        *num = $<n_var>3;
+        Object numObj = object_createNumber(num);
+        numObj.type = $<var_type>2;
+        object_ValueDataListAdd(&$$, &numObj, &@3);
+    }
+    | HERE_IS_A VAR_TYPE STR_LIT {
+        object_ValueDataListCreate($<var_type>2, NULL, &$$);
+        Object strObj = object_createStr($<s_var>3);
+        object_ValueDataListAdd(&$$, &strObj, &@3);
+    }
 ;
 
+EndStmt
+    : NAME_IT IDENT { code_createVariable(&$<val_data>0, $<s_var>2); $<val_data>$ = $<val_data>0; } RepeatSaidIdentStmt
+    | PRINT { code_stdoutPrint(&$<val_data>0, true); }
+;
+
+RepeatSaidIdentStmt
+    : /* empty */
+    | RepeatSaidIdentStmt SAID IDENT { code_createVariable(&$<val_data>0, $<s_var>3); }
+;
+
+
+PushStmt
+    : /* empty */
+    | PushStmt EXP_PREPOSITION ValueStmt { code_arrayPush(&$<obj_val>0, &$<obj_val>3, &@2); }
+;
+
+
 VariableDefineStmt
-    :
+    : NAME_IT IDENT { code_createVariable(&$<val_data>0, $<s_var>2); }
+    | SAID IDENT { code_createVariable(&$<val_data>0, $<s_var>2); }
 ;
 
 /* Expressions */
@@ -137,15 +194,28 @@ VariableDefineStmt
  * 注意：鏈式第一項用 code_expression，後續用 code_expressionChain；需更新 ctx->last_result
  */
 ExpressionChainStmt
-    :
+    : ExpressionStmt { $$ = $1; ctx->last_result = $1; }
+    | ExpressionChainStmt EXP_MATH_OP ITS EXP_PREPOSITION ValueStmt { $$ = code_expressionChain($<exp_op>2, $<exp_left>4, &ctx->last_result, &$5, &@2, &@5); ctx->last_result = $$; }
+    | ExpressionChainStmt EXP_MATH_OP ValueStmt EXP_PREPOSITION ITS { yylloc.first_column += 2;  $$ = code_expressionChain($<exp_op>2, $<exp_left>4, &$3, &ctx->last_result, &@3, &@2); ctx->last_result = $$; }
+    | ExpressionChainStmt EXP_MATH_OP ITS EXP_PREPOSITION ValueStmt EXP_MATH_MOD_OP { $$ = code_expressionChainMod($<exp_op>2, OP_MOD, $<exp_left>4, &ctx->last_result, &$5, &@2, &@6); ctx->last_result = $$; }
 ;
 
 ExpressionStmt
-    :
+    : EXP_MATH_OP ValueStmt EXP_PREPOSITION ValueStmt { $$ = code_expression($<exp_op>1, $<exp_left>3, &$2, &$4, &@2, &@4); }
+    | EXP_MATH_OP ValueStmt EXP_PREPOSITION ValueStmt EXP_MATH_MOD_OP { $$ = code_expressionMod($<exp_op>1, OP_MOD, $<exp_left>3, &$2, &$4, &@1, &@5); }
+    | ValueStmt EXP_LOGIC_OP ValueStmt { yylloc.first_column++; $$ = code_expression($<exp_op>2, false, &$1, &$3, &@1, &@3); }
+    | THOSE ValueStmt ValueStmt EXP_BINARY_LOGIC_OP { $$ = code_expression($<exp_op>4, false, &$2, &$3, &@2, &@3); }
 ;
 
 ExpressionNextStmt
-    :
+    : NAME_IT IDENT {
+            ValueData vd;
+            object_ValueDataListCreate(object_getValueType(&ctx->last_result), NULL, &vd);
+            object_ValueDataListAdd(&vd, &ctx->last_result, &@1);
+            code_createVariable(&vd, $<s_var>2);
+    }
+    | PRINT {/* */}
+    | /* empty */ %prec LOWER_THAN_EXPR
 ;
 
 ValueLiteralOrLastStmt
@@ -158,19 +228,36 @@ ValueLiteralOrLastStmt
  * 注意：ITS 取 ctx->last_result；陣列索引與長度為 ValueStmt 的延伸形式
  */
 ValueStmt
-    :
+    : ValueLiteralStmt { $$ = $1; }
+    | VariableStmt     { $$ = $1; }
+;
+
+/* 值區：SAID 後面接字面值或變數，直到遇到 NAME_IT 或 PRINT 為止 */
+MultiLitOrVarStmt
+    : /* empty */
+    | MultiLitOrVarStmt SAID ValueLiteralStmt { object_ValueDataListAdd(&$<val_data>0, &$3, &@3); }
+    | MultiLitOrVarStmt SAID VariableStmt { object_ValueDataListAdd(&$<val_data>0, &$3, &@3); }
+    | MultiLitOrVarStmt SAID ExpressionStmt { object_ValueDataListAdd(&$<val_data>0, &$3, &@3); }
 ;
 
 LitOrVarStmt
-    :
+    : SAID ValueLiteralStmt { $$ = $2; }
+    | SAID VariableStmt     { $$ = $2; }
+;
+
+NoSaidLitOrVarStmt
+    : ValueLiteralStmt { $$ = $1; }
+    | VariableStmt     { $$ = $1; }
 ;
 
 ValueLiteralStmt
-    :
+    : NUMBER_LIT { $$ = object_createNumber(&$<n_var>1); }
+    | BOOL_LIT   { $$ = object_createBool($<b_var>1); }
+    | STR_LIT    { $$ = object_createStr($<s_var>1); }
 ;
 
 VariableStmt
-    :
+    : IDENT { $$ = scope_findSymbol($<s_var>1); }
 ;
 
 %%

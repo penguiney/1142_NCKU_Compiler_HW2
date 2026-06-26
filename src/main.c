@@ -45,6 +45,12 @@ bool code_stdoutPrintObject(Object* src, bool space, bool newLine) {
     case OBJECT_TYPE_I32:
     case OBJECT_TYPE_F64:
     case OBJECT_TYPE_STR: {
+        buffPrintln(&ctx->code,
+            "call i32 (ptr, ...) @printf(ptr @fmt_%s%s, %s %s)",
+            objectType2llvmType[srcValueType],
+            newLine ? "_n" : "",
+            objectType2llvmType[srcValueType],
+            regName);
         // TODO: 用 buffPrintln 輸出 printf 呼叫
         //   objectType2llvmType[srcValueType] 取得 llvmType，組出格式字串 @fmt_<type>[_n]
         //   範例（I32 有換行）：call i32 (ptr, ...) @printf(ptr @fmt_i32_n, i32 %reg0)
@@ -104,13 +110,17 @@ bool code_stdoutPrint(ValueData* valueData, bool newLine) {
 
 // buffPrintln / compilerLog 用法：見 README.md §工具函式速查
 bool code_createVariable(ValueData* valueData, char* name) {
+    //compilerLog("[main]code_createVariable\n");
     Object* src = object_ValueDataListPop(valueData);
+    //compilerLog("[debug] type=%d fraction=%lld exp=%d\n", src->value.number->type, src->value.number->fraction, src->value.number->exp);
     const ObjectType srcValueType = object_getValueType(src);
     SymbolData* symbol = scope_addSymbol(srcValueType, name);
 
     compilerLog("var 「%s」 <- %s\n", name, object_print(src));
-
+    
     {
+        
+        /*
         // Quick Start：僅支援數字字面值，直接用 sciToStr 取得 LLVM 運算元字串
         // TODO: 實作 object_nameLiteralOrLoadReg 後，改成：
         //   char regName[MAX_NAME_LENGTH];
@@ -130,12 +140,25 @@ bool code_createVariable(ValueData* valueData, char* name) {
         const char* llvmTypeName = objectType2llvmType[srcValueType];
         buffPrintln(&ctx->code, "%%var.%d = alloca %s", symbol->index, llvmTypeName);
         buffPrintln(&ctx->code, "store %s %s, ptr %%var.%d", llvmTypeName, regName, symbol->index);
-    }
+        */
+        // 🎯 最小改動：直接呼叫 object_nameLiteralOrLoadReg 取得正確的 LLVM 常數或暫存器
+        char regName[MAX_NAME_LENGTH];
+        Object regSrc = object_nameLiteralOrLoadReg(src, regName, MAX_NAME_LENGTH);
+        if (regSrc.type == OBJECT_TYPE_UNDEFINED) goto FAILED;
 
+        // 依然保留你原來的 alloca 與 store 邏輯
+        const char* llvmTypeName = objectType2llvmType[srcValueType];
+        buffPrintln(&ctx->code, "%%var.%d = alloca %s", symbol->index, llvmTypeName);
+        buffPrintln(&ctx->code, "store %s %s, ptr %%var.%d", llvmTypeName, regName, symbol->index);
+
+        // 如果回傳的是暫存器符號，記得釋放
+        if (src->type == OBJECT_TYPE_SYMBOL || src->type == OBJECT_TYPE_SYMBOL) object_free(&regSrc);
+    }
     free(name);
     object_free(src);
     return false;
 FAILED:
+    //compilerLog("[main]code_createVariable :  regSrc.type == OBJECT_TYPE_UNDEFINED\n");
     free(name);
     object_free(src);
     return true;
@@ -149,11 +172,32 @@ bool code_assign(Object* dest, Object* src) {
         goto FAILED;
     }
 
-    // TODO: 實作變數賦值 IR 生成
-    //   1. 取得 src 的 IR 運算元字串（參考 object_nameLiteralOrLoadReg）
-    //   2. 驗證 src 與 dest 型別相符，不符時回報語意錯誤
-    //   3. 輸出 store IR，將值寫入 dest 對應的 alloca 位址
-    //   4. 清理 Object，return false
+    // 1. 取得 src 的 IR 運算元字串（參考 object_nameLiteralOrLoadReg）
+    char regName[MAX_NAME_LENGTH];
+    Object regSrc = object_nameLiteralOrLoadReg(src, regName, MAX_NAME_LENGTH);
+    if (regSrc.type == OBJECT_TYPE_UNDEFINED) goto FAILED;
+
+    // 2. 驗證 src 與 dest 型別相符，不符時回報語意錯誤
+    const ObjectType destType = dest->value.symbol->type;
+    const ObjectType srcType = object_getValueType(src);
+    if (destType != srcType) {
+        yyerrorf("型別不相符：欲賦『%s』予『%s』之變數\n",
+                    objectType2str[srcType], objectType2str[destType]);
+        if (src->type == OBJECT_TYPE_SYMBOL) object_free(&regSrc);
+        goto FAILED;
+    }
+
+    // 3. 輸出 store IR，將值寫入 dest 對應的 alloca 位址
+    const char* llvmTypeName = objectType2llvmType[destType];
+    buffPrintln(&ctx->code, "store %s %s, ptr %%var.%d",
+                llvmTypeName, regName, dest->value.symbol->index);
+
+    // 4. 清理 Object，return false
+    if (src->type == OBJECT_TYPE_SYMBOL) object_free(&regSrc);
+
+    object_free(dest);
+    object_free(src);
+    return false;
 
 FAILED:
     object_free(dest);
@@ -181,9 +225,10 @@ Object code_getLength(Object* obj, const YYLTYPE* loc) {
 }
 
 bool code_arrayPush(const Object* arr, Object* val, const YYLTYPE* loc) {
+    //compilerLog("[main]code_arrayPush\n");
     const ObjectType arrType = object_getValueType(arr);
     if (arr->type != OBJECT_TYPE_SYMBOL || arrType != OBJECT_TYPE_ARRAY) {
-        yyerrorlf("「%s」非列，無由充之\n", loc, objectType2str[arrType]);
+        yyerrorlf("「%s」並非符號 或「%s」並非列，無由充之\n", loc, objectType2str[arr->type], objectType2str[arrType]);
         goto FAILED;
     }
 
@@ -318,7 +363,6 @@ void writeOutputMain() {
     code("    store ptr %%_stdout, ptr @stdout");
 #endif
     code("    %%g_stdout = load ptr, ptr @stdout");
-
     byteBufferWriteToFile(&ctx->code, yyout);
     code("    ret i32 0");
     code("}");
@@ -426,6 +470,9 @@ int main(int argc, char* argv[]) {
     yyparse();
 
     scope_dump();
+
+    fseek(yyout, 0, SEEK_SET);
+    ftruncate(fileno(yyout), 0);
 
     if (compileError) {
         fclose(yyin);
