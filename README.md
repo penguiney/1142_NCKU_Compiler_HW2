@@ -20,6 +20,7 @@
 | 本文件（`README.md`） | 環境建置、填空規格、工具函式速查 | 開始實作前通讀，實作中隨時查 |
 | [`YACC_CHEATSHEET.md`](YACC_CHEATSHEET.md) | `compiler.y` 進階語法：`$<type>N`、`$0`/`$-1`、mid-rule action、shift/reduce 衝突除錯 | 寫 `compiler.y` 遇到問題時查 |
 | [`LLVM_IR_CHEATSHEET.md`](LLVM_IR_CHEATSHEET.md) | 所有 IR 指令參考、phi 節點、if/for/while block 結構 | 實作 IR 生成函式時查 |
+| [`CHANGELOG.md`](CHANGELOG.md) | repo 釋出後的修正紀錄、是否要改自己的程式碼、如何 merge | 每次 `git pull`/`merge` 前都該看 |
 
 ---
 

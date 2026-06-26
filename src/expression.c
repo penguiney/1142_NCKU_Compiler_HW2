@@ -89,6 +89,10 @@ Object code_expression(const ExpOp eop, const bool opLeft, Object* a, Object* b,
         .type = OBJECT_TYPE_REGISTER,
         .value.symbol = cloneStruct(SymbolData, &resultSymbol)
     };
+    //   6. 用 compilerLogAt(aLoc, ...) 印 log（別用 compilerLog：全域 yylloc
+    //      此時可能已被 lookahead 推到下一句；aLoc 在文法規則裡記得傳這個
+    //      運算式自己的起點 token，不要傳成運算元的位置——詳見 YACC_CHEATSHEET.md）
+    //   7. 清理 Object，回傳 REGISTER Object
 
 FAILED:
     if (!object_sameRegister(a, b)) object_free(a);
