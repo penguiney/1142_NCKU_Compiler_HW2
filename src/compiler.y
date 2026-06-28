@@ -35,29 +35,38 @@
     bool exp_left;
     ExpOp exp_op;
 }
-/* Token — quick start 最小集合，實作各規則時依需要自行補充 */
-%token COMMENT
-%token HERE_ARE HERE_IS_A SAID NAME_IT PAST TOPIC SET ITS IS_THUS
-%token IF ELSE_IF ELSE FOR TIMES WHILE_TRUE BREAK END
-%token INDEX PUSH LENGTH THOSE TAKE 
-%token PRINT TO_CALL
-%token RETURN
 
+/* Token — quick start 最小集合，實作各規則時依需要自行補充 */
+/* 基本型別與字面值 */
 %token <n_var> NUMBER_LIT
 %token <b_var> BOOL_LIT
-%token <var_type> VAR_TYPE
-%token <var_type> VAR_TYPE_FUNC
 %token <s_var> STR_LIT IDENT
-%token <exp_op> EXP_MATH_OP EXP_MATH_MOD_OP EXP_LOGIC_OP EXP_BINARY_LOGIC_OP 
+%token <var_type> VAR_TYPE VAR_TYPE_FUNC
+
+/* 變數宣告與賦值 */
+%token HERE_IS_A HERE_ARE NAME_IT SAID PAST TOPIC SET ITS IS_THUS
+
+/* 數學與邏輯運算 */
+%token <exp_op> EXP_MATH_OP EXP_MATH_MOD_OP EXP_LOGIC_OP EXP_BINARY_LOGIC_OP
 %token <exp_left> EXP_PREPOSITION
+
+/* 流程控制 */
+%token IF ELSE_IF ELSE FOR TIMES WHILE_TRUE BREAK RETURN END
+
+/* 函數操作 */
+%token TO_PERFORM_FUNC REQUIRE_ARGS FUNC_BEGIN FUNC_END_FOR FUNC_END CALL TO_CALL
+
+/* 陣列與其他操作 */
+%token INDEX PUSH LENGTH PRINT THOSE TAKE COMMENT
+
 
 /* %left 範例 — ValueStmt 實作時視衝突補充 */
 %left INDEX
 
 /* Nonterminal with return — 實作子規則時依需要自行補充 */
 %type <val_data> CreateValueDataListStmt
-%type <obj_val> ValueLiteralStmt VariableStmt NoSaidLitOrVarStmt LitOrVarStmt MultiLitOrVarStmt 
-%type <obj_val> ExpressionStmt ExpressionChainStmt ValueStmt
+%type <obj_val> ValueLiteralStmt VariableStmt LitOrVarStmt MultiLitOrVarStmt 
+%type <obj_val> ExpressionStmt ExpressionChainStmt ValueStmt FunctionNextStmt
 
 /* For Return — 用於已提供的 ReturnStmt，詳見 YACC_CHEATSHEET.md §優先序宣告 */
 %nonassoc LOWER_THAN_EXPR
@@ -97,15 +106,20 @@ BodyStmt
  * 注意：參數型別需透過 $<var_type>0 跨規則傳遞；參數列與參數名稱各自是一層規則
  */
 FunctionStmt
-    :
+    : HERE_ARE NUMBER_LIT VAR_TYPE_FUNC NAME_IT IDENT { func_define(&$<n_var>2, $<s_var>5); }
+      TO_PERFORM_FUNC FunctionArgsStmt FUNC_BEGIN { func_defineBody(); }
+      BodyListStmt FUNC_END_FOR IDENT FUNC_END 
+      { Object funcObj = scope_findSymbol($<s_var>13); func_defineBodyEnd(&funcObj, $<s_var>13); }
 ;
 
 FunctionArgsStmt
-    :
+    : /* empty */
+    | REQUIRE_ARGS NUMBER_LIT VAR_TYPE FunctionArgListStmt
 ;
 
 FunctionArgListStmt
-    :
+    : SAID IDENT { func_defineAddParam($<var_type>0, $<s_var>2); }
+    | FunctionArgListStmt SAID IDENT { func_defineAddParam($<var_type>0, $<s_var>3); }
 ;
 
 /* Condition and Operation */
@@ -145,35 +159,60 @@ ElseIfStmt
  */
 OperationStmt
     : CreateValueDataListStmt { $<val_data>$ = $1; } MultiLitOrVarStmt { object_ValueDataListAddDefaults(&$<val_data>2, &@1); $<val_data>$ = $<val_data>2; } EndStmt
-    | PAST IDENT TOPIC SET NoSaidLitOrVarStmt IS_THUS { Object dest = scope_findSymbol($<s_var>2); code_assign(&dest, &$5); }
+    | PAST IDENT TOPIC SET ValueStmt IS_THUS { Object dest = scope_findSymbol($<s_var>2); code_assign(&dest, &$5); }
     | ExpressionChainStmt { ctx->last_result = $1; } ExpressionNextStmt
     | ExpressionChainStmt PAST IDENT TOPIC SET ITS IS_THUS {yylloc = @3; Object dest = scope_findSymbol($<s_var>3); code_assign(&dest, &$1); }
     | THOSE VariableStmt INDEX VariableStmt { ctx->last_result = object_getIndex(&$2, &$4, &@2, &@4); } ExpressionNextStmt
     | PUSH VariableStmt PushStmt
     | THOSE VariableStmt LENGTH PRINT {Object leng = code_getLength(&$2, &@1); code_stdoutPrintObject( &leng, false, true);}
+    | RETURN VariableStmt { code_return(&$2, &@1); }
+    | RETURN { code_return(&(Object){OBJECT_TYPE_UNDEFINED}, &@1); }
+    | CALL VariableStmt { $<func_call>$ = func_callInit(&$2); } FunctionCallArgsStmt {
+          ValueData ret = {.count = 0};
+          func_call($<func_call>3, &$2, &ret, &@2);
+          Object* retObj = object_ValueDataListPop(&ret);
+          if (retObj) ctx->last_result = *retObj;
+    } FunctionNextStmt
+    | THOSE VariableStmt NAME_IT IDENT { 
+        ValueData vd;
+        object_ValueDataListCreate(OBJECT_TYPE_REGISTER, NULL, &vd);
+        object_ValueDataListAdd(&vd, &$2, &@1);
+        code_createVariable(&vd, $<s_var>4);
+    }
+    | ExpressionChainStmt TAKE NUMBER_LIT TO_CALL VariableStmt NAME_IT IDENT { 
+        ValueData vd;
+        object_ValueDataListCreate(object_getValueType(&$1), NULL, &vd);
+        object_ValueDataListAdd(&vd, &$1, &@1);
+        func_takeAndCall(&$3, &$5, &vd, &@5);
+        code_createVariable(&vd, $<s_var>7);
+    }
 ;
+
+FunctionNextStmt
+    : EXP_MATH_OP ITS EXP_PREPOSITION ValueStmt { ctx->last_result = code_expressionChain($<exp_op>1, $<exp_left>3, &ctx->last_result, &$4, &@1, &@4); } ExpressionNextStmt
+    | ExpressionNextStmt
+;
+
+
+
+FunctionCallArgsStmt
+    : /* empty */
+    | FunctionCallArgsStmt EXP_PREPOSITION ValueStmt { func_callArgAdd($<func_call>0, &$3, &@3); }
+;
+
 
 CreateValueDataListStmt
     : HERE_IS_A VAR_TYPE { object_ValueDataListCreate($<var_type>2, NULL, &$$); }
     | HERE_ARE NUMBER_LIT VAR_TYPE { object_ValueDataListCreate($<var_type>3, &$<n_var>2, &$$); }
-    | HERE_IS_A VAR_TYPE NUMBER_LIT { 
-        object_ValueDataListCreate($<var_type>2, NULL, &$$);
-        ScientificNotation* num = malloc(sizeof(ScientificNotation));
-        *num = $<n_var>3;
-        Object numObj = object_createNumber(num);
-        numObj.type = $<var_type>2;
-        object_ValueDataListAdd(&$$, &numObj, &@3);
-    }
-    | HERE_IS_A VAR_TYPE STR_LIT {
-        object_ValueDataListCreate($<var_type>2, NULL, &$$);
-        Object strObj = object_createStr($<s_var>3);
-        object_ValueDataListAdd(&$$, &strObj, &@3);
-    }
 ;
 
 EndStmt
     : NAME_IT IDENT { code_createVariable(&$<val_data>0, $<s_var>2); $<val_data>$ = $<val_data>0; } RepeatSaidIdentStmt
     | PRINT { code_stdoutPrint(&$<val_data>0, true); }
+    | TAKE NUMBER_LIT TO_CALL VariableStmt RETURN END {
+        func_takeAndCall(&$2, &$4, &$<val_data>0, &@4);
+        code_returnValue( &$<val_data>0, &@5);
+    }
 ;
 
 RepeatSaidIdentStmt
@@ -218,7 +257,8 @@ ExpressionStmt
 ;
 
 ExpressionNextStmt
-    : NAME_IT IDENT {
+    : /* empty */
+    | NAME_IT IDENT {
             ValueData vd;
             object_ValueDataListCreate(object_getValueType(&ctx->last_result), NULL, &vd);
             object_ValueDataListAdd(&vd, &ctx->last_result, &@1);
@@ -245,6 +285,7 @@ ValueStmt
 /* 值區：SAID 後面接字面值或變數，直到遇到 NAME_IT 或 PRINT 為止 */
 MultiLitOrVarStmt
     : /* empty */
+    | ValueLiteralStmt { object_ValueDataListAdd(&$<val_data>0, &$1, &@1); }
     | MultiLitOrVarStmt SAID ValueLiteralStmt { object_ValueDataListAdd(&$<val_data>0, &$3, &@3); }
     | MultiLitOrVarStmt SAID VariableStmt { object_ValueDataListAdd(&$<val_data>0, &$3, &@3); }
     | MultiLitOrVarStmt SAID ExpressionStmt { object_ValueDataListAdd(&$<val_data>0, &$3, &@3); }
@@ -253,11 +294,6 @@ MultiLitOrVarStmt
 LitOrVarStmt
     : SAID ValueLiteralStmt { $$ = $2; }
     | SAID VariableStmt     { $$ = $2; }
-;
-
-NoSaidLitOrVarStmt
-    : ValueLiteralStmt { $$ = $1; }
-    | VariableStmt     { $$ = $1; }
 ;
 
 ValueLiteralStmt

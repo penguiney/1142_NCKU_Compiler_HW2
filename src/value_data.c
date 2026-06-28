@@ -34,7 +34,7 @@ bool object_ValueDataListAdd(ValueData* valueData, const Object* obj, const YYLT
 
     // AUTO 型別應在此時確定（若容器是 AUTO，由第一個元素決定型別）
     if (valueData->valueType == OBJECT_TYPE_AUTO) {
-        valueData->valueType = objValueType;
+        valueData->valueType = object_getPromotedType(objValueType, objValueType);
     }
 
     // 檢查數量上限：超過 count 上限應報錯
@@ -45,11 +45,11 @@ bool object_ValueDataListAdd(ValueData* valueData, const Object* obj, const YYLT
     }
 
     // 型別相容性檢查（比對確定後的型別）
-    if (valueData->valueType != objValueType && valueData->valueType != OBJECT_TYPE_STR) {
-        yyerrorf("[value_data]型別不相容 : %d / %d\n", valueData->valueType, objValueType);
+    if (valueData->valueType != OBJECT_TYPE_STR && valueData->valueType != objValueType && 
+            object_getPromotedType(valueData->valueType, objValueType) == OBJECT_TYPE_UNDEFINED) {
+        yyerrorf("[value_data]型別不相容 : %d / %d\n", valueData->valueType, objValueType); 
         return true;
     }
-
 
     Object* clone = cloneStruct(Object, obj);
     //compilerLog("[debug] type=%d fraction=%lld exp=%d\n", clone->value.number->type, clone->value.number->fraction, clone->value.number->exp);

@@ -197,11 +197,31 @@ Object object_nameLiteralOrLoadReg(const Object* src, char* buffer, const size_t
         snprintf(buffer, bufferLen, "%%reg%s", src->value.symbol->name);
         return *src;
     case OBJECT_TYPE_SYMBOL: {
+        const SymbolData* sym = src->value.symbol;
         // TODO: (Week 4) 補全三個特殊 SYMBOL 情況，各自有不同的 buffer 格式與回傳方式
         //   1. capturedIndex >= 0：閉包上值，讀取方式與一般變數不同
         //   2. funcArg：函式參數，已在暫存器中，不需額外 load
         //   3. type == OBJECT_TYPE_FUNC：函式指標，使用全域符號名稱
         //   各情況的 IR 運算元格式參考 README.md §object_nameLiteralOrLoadReg
+        
+        // 1. capturedIndex >= 0：閉包上值
+        if (src->capturedIndex >= 0) {
+            snprintf(buffer, bufferLen, "%%upval.%d", src->capturedIndex);
+            return (Object){OBJECT_TYPE_REGISTER, .capturedIndex = -1, .value.symbol = symbol_clone((SymbolData*)sym)};
+        }
+
+        // 2. funcArg：函式參數，已在暫存器中，不需額外 load
+        if (sym->funcArg) {
+            snprintf(buffer, bufferLen, "%%var.%d", sym->index);
+            return (Object){OBJECT_TYPE_REGISTER, .capturedIndex = -1, .value.symbol = symbol_clone((SymbolData*)sym)};
+        }
+
+        // 3. type == OBJECT_TYPE_FUNC：函式指標
+        if (sym->type == OBJECT_TYPE_FUNC) {
+            const int funcCtxId = sym->funcInfo->contextId;
+            snprintf(buffer, bufferLen, "@func_%d_%d", funcCtxId, sym->index);
+            return (Object){OBJECT_TYPE_REGISTER, .capturedIndex = -1, .value.symbol = symbol_clone((SymbolData*)sym)};
+        }
 
         // Load symbol value to register（一般變數）
         const SymbolData symbol = object_createRegisterSymbol(src->value.symbol->type);
@@ -210,10 +230,10 @@ Object object_nameLiteralOrLoadReg(const Object* src, char* buffer, const size_t
         snprintf(buffer, bufferLen, "%%reg%s", symbol.name);
         return (Object){OBJECT_TYPE_REGISTER, .value.symbol = cloneStruct(SymbolData, &symbol)};
     }
+    case OBJECT_TYPE_NUM:
     case OBJECT_TYPE_I32:
     case OBJECT_TYPE_I64:
     case OBJECT_TYPE_F64: {
-        //compilerLog("[debug] =%d\n", src->value.number->exp);
         char* numStr = sciToStr(src->value.number);
         //compilerLog("[debug] =%s\n", numStr);
         snprintf(buffer, bufferLen, "%s", numStr);

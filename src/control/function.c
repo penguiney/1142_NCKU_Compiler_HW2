@@ -10,6 +10,7 @@
 #include "../compiler_util.h"
 
 Object func_define(const ScientificNotation* funcDefCount, char* funcName) {
+    //compilerLog("[function]func_define\n");
     compilerLog("> (function define: %s)\n", funcName);
 
     const int count = sciToInt32(funcDefCount);
@@ -46,6 +47,7 @@ Object func_define(const ScientificNotation* funcDefCount, char* funcName) {
 }
 
 bool func_defineAddParam(const ObjectType type, char* name) {
+    //compilerLog("[function]func_defineAddParam\n");
     compilerLog("> (function param: %s, type: %s)\n", name, objectType2str[type]);
 
     // Add parameter to function scope
@@ -63,11 +65,13 @@ bool func_defineAddParam(const ObjectType type, char* name) {
 }
 
 bool func_defineBody() {
+    //compilerLog("[function]func_defineBody\n");
     compilerLog("> (function start body)\n");
     return false;
 }
 
 bool func_defineBodyEnd(Object* funcObj, char* funcName) {
+    //compilerLog("[function]func_defineBodyEnd\n");
     compilerLog("< (function end: %s)\n", funcName);
 
     ScopeData* func_scope = scope_getFunction();
@@ -146,6 +150,7 @@ bool func_defineBodyEnd(Object* funcObj, char* funcName) {
 }
 
 bool code_return(const Object* obj, const YYLTYPE* tokenLoc) {
+    //compilerLog("[function]code_return\n");
     compilerLogAt(tokenLoc, "return %s\n", object_print(obj));
 
     ScopeData* func_scope = scope_getFunction();
